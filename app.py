@@ -9,26 +9,19 @@ from typing import List
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Highlighter Agent", layout="wide")
 
-# Groq config stored in st.secrets
 groq_key = st.secrets["groq"]["api_key"]
 groq_model = st.secrets["groq"].get("model", "llama-3.1-8b-instant")
 
-# ---------- UI ----------
 st.title("PDF Highlighter Agent (Groq)")
-
 st.write(
-    "Upload one or more CV PDFs, and the app will highlight all company names "
-    "where the person has worked with a red backdrop."
+    "Upload CV PDFs and highlight company names with red backdrop."
 )
 
 uploaded_files = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
 
-# Fixed highlight color: red
 color_choice = "red"
 opacity = st.slider("Backdrop opacity (0 = transparent, 1 = opaque)", 0.1, 0.9, 0.45)
 process = st.button("Process PDFs")
-
-# ---------- Helpers ----------
 
 def call_groq_chat(pdf_text: str) -> str:
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -108,7 +101,7 @@ def color_to_rgb_tuple(color_name: str):
         "green": (0, 1, 0),
         "blue": (0, 0, 1),
     }
-    return mapping.get(color_name.lower(), (1, 0, 0))  # default to red
+    return mapping.get(color_name.lower(), (1, 0, 0))
 
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
     doc = fitz.open(input_path)
@@ -143,8 +136,6 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
 
-# ---------- Main ----------
-
 if process:
     if not uploaded_files:
         st.error("Please upload one or more PDFs first.")
@@ -168,14 +159,17 @@ if process:
                 text_for_model = "\n".join(full_text)
                 text_for_model = text_for_model[:13000]
 
-                # Debug: show extracted text (optional)
-                # st.text_area("Extracted text sent to model", text_for_model, height=300)
+                # Debug: Show extracted text
+                st.text_area("Extracted text sent to model", text_for_model, height=300)
 
                 try:
                     raw = call_groq_chat(text_for_model)
                 except Exception as e:
                     st.error(f"LLM call failed for {uploaded.name}: {e}")
                     continue
+
+                # Debug: Show raw model output
+                st.text_area("Raw model output", raw, height=200)
 
                 targets = parse_model_output(raw)
                 if not targets:
