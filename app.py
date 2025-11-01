@@ -4,6 +4,7 @@ import fitz  # PyMuPDF
 import requests
 import json
 import ast
+import re
 from typing import List
 
 # ---------- CONFIG ----------
@@ -31,17 +32,16 @@ def call_groq_chat(pdf_text: str) -> str:
     }
 
     system_msg = (
-        "You are a JSON-only assistant that extracts the exact names of companies, organizations, or workplaces "
-        "where the candidate has experience or has worked, from the provided CV text. "
-        "Include any short phrases that look like company or workplace names, even if they appear without full sentences. "
-        "Return only a JSON list of strings containing these names, with no extra text."
+        "You are a JSON-only assistant. "
+        "Given the CV text, extract and return ONLY a JSON array of exact company or workplace names where the candidate worked. "
+        "Do NOT include any explanations or additional text. "
+        "The output must be valid JSON, for example: [\"Cactus\", \"Techware Hub\"]"
     )
 
     user_msg = (
-        "Extract and return a JSON array of all company names, organizations, or workplaces mentioned in the CV text below, "
-        "including short phrases under experience or work history sections.\n"
-        "Only return a JSON array of exact strings to highlight in the PDF."
-        f"\n\nCV_TEXT_START\n{pdf_text}\nCV_TEXT_END"
+        "Extract only a JSON array of company names or workplaces from the CV text below. "
+        "Return no other text.\n\n"
+        f"CV_TEXT_START\n{pdf_text}\nCV_TEXT_END"
     )
 
     payload = {
@@ -64,27 +64,22 @@ def parse_model_output(raw: str) -> List[str]:
     raw = raw.strip()
     if not raw:
         return []
+    # Extract JSON array substring with regex
+    match = re.search(r'\[.*?\]', raw, re.DOTALL)
+    if match:
+        try:
+            parsed = json.loads(match.group())
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed if isinstance(x, (str, int, float))]
+        except Exception:
+            pass
+    # fallback to previous parsing strategies:
     try:
         parsed = json.loads(raw)
         if isinstance(parsed, list):
             return [str(x) for x in parsed if isinstance(x, (str, int, float))]
     except Exception:
         pass
-    start = raw.find("[")
-    end = raw.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        snippet = raw[start : end + 1]
-        try:
-            parsed = json.loads(snippet)
-            if isinstance(parsed, list):
-                return [str(x) for x in parsed if isinstance(x, (str, int, float))]
-        except Exception:
-            try:
-                parsed = ast.literal_eval(snippet)
-                if isinstance(parsed, list):
-                    return [str(x) for x in parsed if isinstance(x, (str, int, float))]
-            except Exception:
-                pass
     try:
         parsed = ast.literal_eval(raw)
         if isinstance(parsed, list):
@@ -159,7 +154,7 @@ if process:
                 text_for_model = "\n".join(full_text)
                 text_for_model = text_for_model[:13000]
 
-                # Debug: Show extracted text
+                # Debug: Show extracted text sent to the model
                 st.text_area("Extracted text sent to model", text_for_model, height=300)
 
                 try:
