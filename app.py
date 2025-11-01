@@ -2,7 +2,7 @@ import streamlit as st
 import tempfile
 import fitz  # PyMuPDF
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate  # ✅ fixed import
 
 # =====================
 # Load secrets & setup
@@ -39,7 +39,7 @@ def highlight_pdf(input_pdf_path, output_pdf_path, highlight_targets):
             text_instances += page.search_for(target)
         for inst in text_instances:
             highlight = page.add_highlight_annot(inst)
-            highlight.set_colors(stroke=(0, 0, 0))  # black highlight outline
+            highlight.set_colors(stroke=(0, 0, 0))  # black outline
             highlight.update()
     doc.save(output_pdf_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
@@ -72,8 +72,8 @@ if process_button and uploaded_files and prompt_text.strip():
             {pdf_text}
             """
 
-            prompt = PromptTemplate(input_variables=["instruction", "pdf_text"], template=template)
-            full_prompt = prompt.format(instruction=prompt_text, pdf_text=text_content[:8000])  # limit text
+            prompt = PromptTemplate.from_template(template)
+            full_prompt = prompt.format(instruction=prompt_text, pdf_text=text_content[:8000])
 
             response = llm.invoke(full_prompt)
             raw_output = response.content.strip()
