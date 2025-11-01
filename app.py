@@ -13,7 +13,7 @@ st.set_page_config(page_title="PDF Highlighter Agent", layout="wide")
 # .streamlit/secrets.toml should have [groq] api_key and model
 groq_key = st.secrets["groq"]["api_key"]
 groq_model = st.secrets["groq"].get("model", "mixtral-8x7b-32768")
-groq_base = "https://api.groq.com/openai/v1"  # OpenAI-compatible endpoint
+groq_base = "https://api.groq.com/openai/v1/chat/completions"  # OpenAI-compatible endpoint
 
 # ---------- UI ----------
 st.title("PDF Highlighter Agent (Groq)")
