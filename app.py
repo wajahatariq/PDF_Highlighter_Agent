@@ -9,7 +9,7 @@ from typing import List
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Highlighter Agent", layout="wide")
 
-# Groq config should be stored in st.secrets
+# Groq config stored in st.secrets
 groq_key = st.secrets["groq"]["api_key"]
 groq_model = st.secrets["groq"].get("model", "llama-3.1-8b-instant")
 
@@ -17,23 +17,20 @@ groq_model = st.secrets["groq"].get("model", "llama-3.1-8b-instant")
 st.title("PDF Highlighter Agent (Groq)")
 
 st.write(
-    "Upload one or more CV PDFs, and the app will highlight all company names where the person has worked with a red backdrop."
+    "Upload one or more CV PDFs, and the app will highlight all company names "
+    "where the person has worked with a red backdrop."
 )
 
 uploaded_files = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
 
-color_choice = "red"  # Fixed to red for company name backdrop highlighting
+# Fixed highlight color: red
+color_choice = "red"
 opacity = st.slider("Backdrop opacity (0 = transparent, 1 = opaque)", 0.1, 0.9, 0.45)
 process = st.button("Process PDFs")
 
 # ---------- Helpers ----------
 
 def call_groq_chat(pdf_text: str) -> str:
-    """
-    Calls the Groq OpenAI-compatible Chat Completion endpoint with a fixed
-    prompt tailored to extract company names worked at in a CV PDF.
-    Returns the assistant content string.
-    """
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {groq_key}",
@@ -41,14 +38,15 @@ def call_groq_chat(pdf_text: str) -> str:
     }
 
     system_msg = (
-        "You are a JSON-only assistant that extracts the exact names of companies or organizations "
-        "where the person has worked from the provided CV text. "
-        "Return only a JSON list of strings containing the company names, without any extra explanation."
+        "You are a JSON-only assistant that extracts the exact names of companies, organizations, or workplaces "
+        "where the candidate has experience or has worked, from the provided CV text. "
+        "Include any short phrases that look like company or workplace names, even if they appear without full sentences. "
+        "Return only a JSON list of strings containing these names, with no extra text."
     )
 
     user_msg = (
-        "Extract and return a JSON array of all company names, workplaces, or organizations "
-        "where the candidate has been employed, based on the following CV text. "
+        "Extract and return a JSON array of all company names, organizations, or workplaces mentioned in the CV text below, "
+        "including short phrases under experience or work history sections.\n"
         "Only return a JSON array of exact strings to highlight in the PDF."
         f"\n\nCV_TEXT_START\n{pdf_text}\nCV_TEXT_END"
     )
@@ -169,6 +167,9 @@ if process:
 
                 text_for_model = "\n".join(full_text)
                 text_for_model = text_for_model[:13000]
+
+                # Debug: show extracted text (optional)
+                # st.text_area("Extracted text sent to model", text_for_model, height=300)
 
                 try:
                     raw = call_groq_chat(text_for_model)
