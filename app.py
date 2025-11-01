@@ -63,13 +63,13 @@ def call_groq_chat(instruction: str, pdf_text: str) -> str:
             },
         ],
         "temperature": 0.0,
-        "max_tokens": 1024,
     }
 
-    resp = requests.post(url, headers=headers, json=payload, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
-    # Follow OpenAI-compatible response shape:
+    response = requests.post(url, headers=headers, json=payload, timeout=60)
+    if response.status_code != 200:
+        st.error(f"Groq API Error {response.status_code}: {response.text}")
+        return ""
+    data = response.json()
     return data["choices"][0]["message"]["content"]
 
 def parse_model_output(raw: str) -> List[str]:
