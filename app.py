@@ -50,10 +50,19 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise CV-parsing assistant. "
-                        "Focus ONLY on the EXPERIENCE section. "
-                        "Extract only the company or organization names the person has worked for. "
-                        "Return output as a JSON array of unique names, like: ['Cactus', 'Techware Hub']."
+                        "You are a precise information extraction assistant. 
+                        Your goal is to read a person's CV text and extract only the **names of actual companies or organizations** where they have worked.
+                        
+                        Ignore:
+                        - Job titles, roles, and positions
+                        - Project names or campaigns
+                        - Educational institutions
+                        - Section headings or skills
+                        - Any non-company words or phrases
+                        
+                        Return only the company or organization names as a valid JSON array. 
+                        Do not include any explanations or extra text — the entire response must be valid JSON, for example:
+                        ['a', 'b']"
                     )
                 },
                 {"role": "user", "content": pdf_text},
