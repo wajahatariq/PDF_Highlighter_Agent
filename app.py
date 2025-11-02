@@ -39,10 +39,7 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                 "role": "system",
                     "content": (
                         "You are a precise CV-parsing assistant. "
-                        "Step 1: Read the CV text and find the section titled 'Experience', 'Work Experience', 'Employment History', or anything similar. "
-                        "Step 2: Only look at that section and the few lines following it. "
-                        "Step 3: Extract the exact organization or company names where the person has worked or gained professional experience. "
-                        "Ignore education institutes, personal details, headings like 'Skills', 'Objective', 'Activities', or anything unrelated. "
+                        "Just give the name of the industries where the indivisual have worked just the names not headings no external data and nothing please
                         "Return only a valid JSON array of unique company names, for example: ['Cactus', 'Techware Hub', 'FB Campaign']."
 
                 )
