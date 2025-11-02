@@ -7,10 +7,10 @@ from typing import List
 from litellm import completion
 
 # ---------- CONFIG ----------
-st.set_page_config(page_title="PDF Highlighter Agent", layout="wide")
+st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
 
 st.title("PDF Company Highlighter (LiteLLM)")
-st.write("Upload a CV PDF, automatically extract company names, and highlight them with a backdrop.")
+st.write("Upload a CV PDF, extract company names from the Experience section, and highlight them.")
 
 # --- User inputs ---
 uploaded_files = st.file_uploader("Upload PDF(s)", type=["pdf"], accept_multiple_files=True)
@@ -18,7 +18,8 @@ color_choice = st.selectbox("Backdrop color", ["red", "yellow", "green", "blue",
 opacity = st.slider("Backdrop opacity (0 = transparent, 1 = opaque)", 0.1, 0.9, 0.45)
 process = st.button("Process PDFs")
 
-# --- Helper functions ---
+
+# ---------- HELPERS ----------
 def color_to_rgb_tuple(color_name: str):
     mapping = {
         "black": (0, 0, 0),
@@ -29,21 +30,32 @@ def color_to_rgb_tuple(color_name: str):
     }
     return mapping.get(color_name.lower(), (1, 0, 0))
 
+
+def extract_experience_section(text: str) -> str:
+    """Extract only the 'Experience' section from CV text."""
+    pattern = r"(?is)(experience[\s\S]*?)(education|extra|skill|objective|$)"
+    match = re.search(pattern, text)
+    if match:
+        section = match.group(1).strip()
+        return section
+    return text.strip()
+
+
 def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
-    """Use LiteLLM to call Groq API for company extraction."""
+    """Call Groq LLM via LiteLLM to extract company names."""
     try:
         response = completion(
             model="groq/llama-3.1-8b-instant",
             messages=[
-            {
-                "role": "system",
+                {
+                    "role": "system",
                     "content": (
                         "You are a precise CV-parsing assistant. "
-                        "Just give the name of the industries where the indivisual have worked just the names not headings no external data and nothing please."
-                        "Return only a valid JSON array of unique company names, for example: ['Cactus', 'Techware Hub', 'FB Campaign']."
-
-                )
-            },
+                        "Focus ONLY on the EXPERIENCE section. "
+                        "Extract only the company or organization names the person has worked for. "
+                        "Return output as a JSON array of unique names, like: ['Cactus', 'Techware Hub']."
+                    )
+                },
                 {"role": "user", "content": pdf_text},
             ],
             api_key=api_key,
@@ -54,40 +66,47 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
         st.error(f"Groq LiteLLM error: {e}")
         return "[]"
 
-def parse_json_output(raw: str) -> List[str]:
-    """Try to parse LLM output as JSON array."""
+
+def smart_parse_companies(raw: str) -> List[str]:
+    """Parse JSON or natural text to extract company names."""
     raw = raw.strip()
     if not raw:
         return []
+
+    # Try strict JSON first
     try:
         match = re.search(r"\[.*?\]", raw, re.DOTALL)
         if match:
-            data = json.loads(match.group())
-        else:
-            data = json.loads(raw)
-        if isinstance(data, list):
-            cleaned = [x.strip() for x in data if isinstance(x, str) and x.strip()]
-            # Deduplicate while preserving order
-            seen = set()
-            return [x for x in cleaned if not (x.lower() in seen or seen.add(x.lower()))]
+            arr = json.loads(match.group())
+            if isinstance(arr, list):
+                return [x.strip() for x in arr if isinstance(x, str) and x.strip()]
     except Exception:
         pass
-    return []
 
-def fallback_company_extraction(text: str) -> List[str]:
-    """Simple regex fallback to find possible companies."""
-    candidates = re.findall(r"\b[A-Z][A-Za-z& ]{2,}\b", text)
-    filtered = [w.strip() for w in candidates if 2 <= len(w.split()) <= 3]
-    unique = []
+    # Fallback: extract from natural sentences
+    lines = re.split(r"[\n,.;]", raw)
+    candidates = []
+    for line in lines:
+        m = re.findall(r"\b([A-Z][A-Za-z0-9&\-\s]{1,40})\b", line)
+        for c in m:
+            if len(c.split()) <= 4 and not any(
+                bad in c.lower()
+                for bad in ["experience", "company", "worked", "organization"]
+            ):
+                candidates.append(c.strip())
+
+    # Deduplicate, preserve order
     seen = set()
-    for word in filtered:
-        if word.lower() not in seen:
-            seen.add(word.lower())
-            unique.append(word)
-    return unique
+    final = []
+    for c in candidates:
+        if c.lower() not in seen:
+            seen.add(c.lower())
+            final.append(c)
+    return final
+
 
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
-    """Highlight given targets with a colored rectangle backdrop."""
+    """Highlight given targets with colored rectangles."""
     doc = fitz.open(input_path)
     for page in doc:
         for t in targets:
@@ -103,7 +122,8 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
 
-# --- MAIN WORKFLOW ---
+
+# ---------- MAIN ----------
 if process:
     if not uploaded_files:
         st.error("Please upload one or more PDFs first.")
@@ -117,6 +137,7 @@ if process:
                 tmp_in.write(uploaded.read())
                 tmp_in.flush()
 
+                # Extract text
                 doc = fitz.open(tmp_in.name)
                 all_text = []
                 for p in doc:
@@ -125,17 +146,17 @@ if process:
                     except Exception:
                         pass
                 doc.close()
-                text_for_model = "\n".join(all_text)[:15000]
 
-                st.text_area("Extracted text sent to model", text_for_model, height=250)
+                # Only send Experience section to model
+                full_text = "\n".join(all_text)
+                text_for_model = extract_experience_section(full_text)[:5000]
+
+                st.text_area("Extracted Experience Section", text_for_model, height=250)
 
                 raw_response = call_groq_via_litellm(text_for_model, api_key)
                 st.text_area("Raw LLM output", raw_response, height=150)
 
-                companies = parse_json_output(raw_response)
-                if not companies:
-                    companies = fallback_company_extraction(text_for_model)
-
+                companies = smart_parse_companies(raw_response)
                 if not companies:
                     st.warning(f"No company names detected for {uploaded.name}.")
                     continue
