@@ -39,7 +39,7 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                 "role": "system",
                     "content": (
                         "You are a precise CV-parsing assistant. "
-                        "Just give the name of the industries where the indivisual have worked just the names not headings no external data and nothing please
+                        "Just give the name of the industries where the indivisual have worked just the names not headings no external data and nothing please."
                         "Return only a valid JSON array of unique company names, for example: ['Cactus', 'Techware Hub', 'FB Campaign']."
 
                 )
