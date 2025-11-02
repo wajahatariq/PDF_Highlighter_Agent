@@ -35,16 +35,19 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
         response = completion(
             model="groq/llama-3.1-8b-instant",
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a smart information extraction agent. "
-                        "From the given CV text, extract ALL organization or company names where the person has studied, trained, "
-                        "or worked — even if phrasing is indirect like 'experience in' or 'interned at'. "
-                        "Return ONLY a valid JSON array of names. "
-                        "Example: ['Cactus', 'Techware Hub', 'FB Campaign', 'Szabist University']"
-                    )
-                },
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert CV parser. "
+                    "Your only goal is to extract the names of organizations or companies the person has WORKED for. "
+                    "Focus ONLY on the text under or near sections titled 'Experience', 'Employment', or 'Work History'. "
+                    "Ignore sections like Education, Skills, Objectives, Personal Information, or Extra Activities. "
+                    "Return ONLY a valid JSON array of exact company names — nothing else. "
+                    "If the Experience section is unclear, make your best judgment from phrases like "
+                    "'worked at', 'experience in', 'employed by', 'internship at', or similar. "
+                    "Example output: ['Cactus', 'Techware Hub', 'ABC Pvt Ltd']."
+                )
+            },
                 {"role": "user", "content": pdf_text},
             ],
             api_key=api_key,
