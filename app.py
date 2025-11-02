@@ -50,7 +50,8 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise information extraction assistant. 
+                        '''
+                        You are a precise information extraction assistant. 
                         Your goal is to read a person's CV text and extract only the **names of actual companies or organizations** where they have worked.
                         
                         Ignore:
@@ -62,7 +63,8 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                         
                         Return only the company or organization names as a valid JSON array. 
                         Do not include any explanations or extra text — the entire response must be valid JSON, for example:
-                        ['a', 'b']"
+                        ['a', 'b']
+                        '''
                     )
                 },
                 {"role": "user", "content": pdf_text},
