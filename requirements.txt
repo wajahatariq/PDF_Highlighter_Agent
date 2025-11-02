@@ -1,6 +1,3 @@
 streamlit
-langchain
-langchain-community
-langchain-openai
 pymupdf
-requests
+litellm
