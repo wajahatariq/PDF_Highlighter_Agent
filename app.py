@@ -3,188 +3,147 @@ import tempfile
 import fitz  # PyMuPDF
 import requests
 import json
-import ast
 import re
+import ast
 from typing import List
 
-# ---------- CONFIG ----------
-st.set_page_config(page_title="PDF Highlighter Agent", layout="wide")
+# ---------------- CONFIG ----------------
+st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
 
+st.title("📄 PDF Company Highlighter (AI + Python)")
+st.write("Upload your CV and this tool will highlight all company names you’ve worked for.")
+
+# Secret keys (from Streamlit Cloud secrets)
 groq_key = st.secrets["groq"]["api_key"]
 groq_model = st.secrets["groq"].get("model", "llama-3.1-8b-instant")
 
-st.title("PDF Highlighter Agent (Groq)")
-st.write(
-    "Upload CV PDFs and highlight company names with red backdrop."
-)
+uploaded_pdf = st.file_uploader("Upload a PDF", type=["pdf"])
+highlight_color = st.selectbox("Select highlight color", ["red", "yellow", "green", "blue"])
+opacity = st.slider("Backdrop opacity", 0.1, 0.9, 0.45)
+process_btn = st.button("Extract & Highlight")
 
-uploaded_files = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
+# ---------------- HELPERS ----------------
 
-color_choice = "red"
-opacity = st.slider("Backdrop opacity (0 = transparent, 1 = opaque)", 0.1, 0.9, 0.45)
-process = st.button("Process PDFs")
-
-def call_groq_chat(pdf_text: str) -> str:
+def call_groq_for_companies(pdf_text: str) -> str:
+    """Ask the LLM to return company names in JSON only."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {groq_key}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"}
 
-    system_msg = (
+    system_prompt = (
         "You are a JSON-only assistant. "
-        "Given the CV text, extract and return ONLY a JSON array of exact company or workplace names where the candidate worked. "
-        "Do NOT include any explanations or additional text. "
-        "The output must be valid JSON, for example: [\"Cactus\", \"Techware Hub\"]"
+        "From the given CV text, extract and return ONLY a JSON array of company or organization names "
+        "where the person has worked. Return no explanations or extra text."
     )
-
-    user_msg = (
-        "Extract only a JSON array of company names or workplaces from the CV text below. "
-        "Return no other text.\n\n"
-        f"CV_TEXT_START\n{pdf_text}\nCV_TEXT_END"
-    )
+    user_prompt = f"CV_TEXT_START\n{pdf_text}\nCV_TEXT_END"
 
     payload = {
         "model": groq_model,
         "messages": [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.0,
+        "temperature": 0,
     }
 
     response = requests.post(url, headers=headers, json=payload, timeout=60)
     if response.status_code != 200:
-        st.error(f"Groq API Error {response.status_code}: {response.text}")
-        return ""
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+        raise RuntimeError(f"Groq API error {response.status_code}: {response.text}")
+    return response.json()["choices"][0]["message"]["content"]
 
-def parse_model_output(raw: str) -> List[str]:
+def parse_json_output(raw: str) -> List[str]:
+    """Extract list of company names from possibly messy model output."""
     raw = raw.strip()
     if not raw:
         return []
-    # Extract JSON array substring with regex
-    match = re.search(r'\[.*?\]', raw, re.DOTALL)
+    match = re.search(r"\[.*?\]", raw, re.DOTALL)
     if match:
         try:
-            parsed = json.loads(match.group())
-            if isinstance(parsed, list):
-                return [str(x) for x in parsed if isinstance(x, (str, int, float))]
+            return json.loads(match.group())
         except Exception:
             pass
-    # fallback to previous parsing strategies:
     try:
-        parsed = json.loads(raw)
-        if isinstance(parsed, list):
-            return [str(x) for x in parsed if isinstance(x, (str, int, float))]
+        return json.loads(raw)
     except Exception:
-        pass
-    try:
-        parsed = ast.literal_eval(raw)
-        if isinstance(parsed, list):
-            return [str(x) for x in parsed if isinstance(x, (str, int, float))]
-    except Exception:
-        pass
-    return []
+        try:
+            return ast.literal_eval(raw)
+        except Exception:
+            return []
 
-def color_to_rgb_tuple(color_name: str):
+def color_to_rgb(color_name: str):
     mapping = {
-        "black": (0, 0, 0),
-        "yellow": (1, 1, 0),
         "red": (1, 0, 0),
+        "yellow": (1, 1, 0),
         "green": (0, 1, 0),
         "blue": (0, 0, 1),
     }
     return mapping.get(color_name.lower(), (1, 0, 0))
 
-def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
+def highlight_words_in_pdf(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
+    """Highlight each target word or phrase with a colored rectangle."""
     doc = fitz.open(input_path)
     for page in doc:
-        found_rects = []
-        for t in targets:
-            if not t.strip():
+        for target in targets:
+            target = target.strip()
+            if not target:
                 continue
-            variants = [t, t.strip(), t.strip().title(), t.strip().upper(), t.strip().lower()]
-            rects = []
-            for v in variants:
-                try:
-                    r = page.search_for(v, hit_max=128)
-                    if r:
-                        rects.extend(r)
-                except Exception:
-                    pass
-            for r in rects:
-                r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
-                found_rects.append(r_inflated)
-        for rect in found_rects:
-            try:
-                annot = page.add_rect_annot(rect)
+            rects = page.search_for(target, hit_max=256)
+            for rect in rects:
+                backdrop = fitz.Rect(rect.x0 - 1, rect.y0 - 0.5, rect.x1 + 1, rect.y1 + 0.5)
+                annot = page.add_rect_annot(backdrop)
                 annot.set_colors(stroke=None, fill=rgb_fill)
                 annot.set_opacity(opacity_val)
                 annot.update()
-            except Exception:
-                try:
-                    page.draw_rect(rect, fill=rgb_fill)
-                except Exception:
-                    pass
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
 
-if process:
-    if not uploaded_files:
-        st.error("Please upload one or more PDFs first.")
-    else:
-        st.info("Processing PDFs. This may take a few moments.")
-        rgb = color_to_rgb_tuple(color_choice)
-        for uploaded in uploaded_files:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_in:
-                tmp_in.write(uploaded.read())
-                tmp_in.flush()
+# ---------------- MAIN ----------------
+if process_btn:
+    if not uploaded_pdf:
+        st.error("Please upload a PDF first.")
+        st.stop()
 
-                doc = fitz.open(tmp_in.name)
-                full_text = []
-                for p in doc:
-                    try:
-                        full_text.append(p.get_text("text"))
-                    except Exception:
-                        full_text.append("")
-                doc.close()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_in:
+        tmp_in.write(uploaded_pdf.read())
+        tmp_in.flush()
 
-                text_for_model = "\n".join(full_text)
-                text_for_model = text_for_model[:13000]
+    # Extract text
+    with fitz.open(tmp_in.name) as doc:
+        text_pages = [p.get_text("text") for p in doc]
+    full_text = "\n".join(text_pages)[:15000]  # limit size
 
-                # Debug: Show extracted text sent to the model
-                st.text_area("Extracted text sent to model", text_for_model, height=300)
+    st.subheader("Extracted Text Preview")
+    st.text_area("Extracted CV text sent to LLM:", full_text, height=300)
 
-                try:
-                    raw = call_groq_chat(text_for_model)
-                except Exception as e:
-                    st.error(f"LLM call failed for {uploaded.name}: {e}")
-                    continue
+    # Ask LLM for company names
+    try:
+        st.info("Asking Groq model to identify company names...")
+        raw_response = call_groq_for_companies(full_text)
+        st.text_area("Raw model output", raw_response, height=200)
+    except Exception as e:
+        st.error(f"LLM call failed: {e}")
+        st.stop()
 
-                # Debug: Show raw model output
-                st.text_area("Raw model output", raw, height=200)
+    companies = parse_json_output(raw_response)
+    if not companies:
+        st.warning("No company names detected. Check the model output above.")
+        st.stop()
 
-                targets = parse_model_output(raw)
-                if not targets:
-                    st.warning(f"No company names found to highlight for {uploaded.name}.")
-                    continue
+    st.write("✅ Companies detected:", companies)
 
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
-                    try:
-                        highlight_pdf_with_backdrop(tmp_in.name, tmp_out.name, targets, rgb, opacity)
-                    except Exception as e:
-                        st.error(f"PDF highlighting failed for {uploaded.name}: {e}")
-                        continue
+    # Highlight and save
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
+        try:
+            highlight_words_in_pdf(tmp_in.name, tmp_out.name, companies, color_to_rgb(highlight_color), opacity)
+        except Exception as e:
+            st.error(f"Failed to highlight PDF: {e}")
+            st.stop()
 
-                    st.success(f"Processed: {uploaded.name}")
-                    with open(tmp_out.name, "rb") as fh:
-                        st.download_button(
-                            label=f"Download highlighted {uploaded.name}",
-                            data=fh,
-                            file_name=f"highlighted_{uploaded.name}",
-                            mime="application/pdf",
-                        )
+        st.success("✅ PDF successfully processed!")
+        with open(tmp_out.name, "rb") as f:
+            st.download_button(
+                label="Download Highlighted PDF",
+                data=f,
+                file_name=f"highlighted_{uploaded_pdf.name}",
+                mime="application/pdf"
+            )
 
-        st.info("Done processing all files.")
