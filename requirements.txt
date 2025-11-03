@@ -1,3 +1,6 @@
 streamlit
 pymupdf
 litellm
+pytesseract
+pillow
+ocrmypdf
