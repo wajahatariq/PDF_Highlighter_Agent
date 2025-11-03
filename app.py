@@ -5,6 +5,9 @@ import json
 import re
 from typing import List
 from litellm import completion
+import pytesseract
+from PIL import Image
+import ocrmypdf
 
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
@@ -40,7 +43,17 @@ def extract_experience_section(text: str) -> str:
         return section
     return text.strip()
 
-
+def convert_to_searchable_pdf(input_pdf: str) -> str:
+    """Run OCR to create a searchable, editable PDF if needed."""
+    import tempfile
+    output_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+    try:
+        ocrmypdf.ocr(input_pdf, output_pdf, deskew=True, force_ocr=True)
+    except Exception as e:
+        st.error(f"OCRmyPDF error: {e}")
+        return input_pdf  # fallback
+    return output_pdf
+    
 def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
     """Call Groq LLM via LiteLLM to extract company names."""
     try:
@@ -148,15 +161,33 @@ if process:
                 tmp_in.write(uploaded.read())
                 tmp_in.flush()
 
-                # Extract text
+                # --- Step 1: Try normal text extraction ---
                 doc = fitz.open(tmp_in.name)
                 all_text = []
                 for p in doc:
                     try:
-                        all_text.append(p.get_text("text"))
+                        page_text = p.get_text("text")
+                        if page_text.strip():
+                            all_text.append(page_text)
                     except Exception:
                         pass
                 doc.close()
+                
+                # --- Step 2: Fallback to OCR if no text found ---
+                if not "".join(all_text).strip():
+                    st.warning(f"No text detected in {uploaded.name}. Running OCR to make it editable...")
+                    searchable_pdf = convert_to_searchable_pdf(tmp_in.name)
+                    doc = fitz.open(searchable_pdf)
+                    all_text = []
+                    for p in doc:
+                        try:
+                            page_text = p.get_text("text")
+                            if page_text.strip():
+                                all_text.append(page_text)
+                        except Exception:
+                            pass
+                    doc.close()
+
 
                 # Only send Experience section to model
                 full_text = "\n".join(all_text)
