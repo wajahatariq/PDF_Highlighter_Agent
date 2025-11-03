@@ -10,13 +10,6 @@ from PIL import Image
 import ocrmypdf
 import os
 
-tess_path = r"C:\Program Files\Tesseract-OCR"
-os.environ["PATH"] += os.pathsep + tess_path
-os.environ["TESSDATA_PREFIX"] = tess_path
-
-# --- Explicitly tell pytesseract the location ---
-pytesseract.pytesseract.tesseract_cmd = os.path.join(tess_path, "tesseract.exe")
-
 
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
@@ -57,7 +50,9 @@ def convert_to_searchable_pdf(input_pdf: str) -> str:
     import tempfile
     output_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
     try:
-        ocrmypdf.ocr(input_pdf, output_pdf, deskew=True, force_ocr=True)
+        env = os.environ.copy()
+        env["PATH"] += os.pathsep + r"C:\Program Files\Tesseract-OCR"
+        ocrmypdf.ocr(input_pdf, output_pdf, deskew=True, force_ocr=True, env=env)
     except Exception as e:
         st.error(f"OCRmyPDF error: {e}")
         return input_pdf  # fallback
