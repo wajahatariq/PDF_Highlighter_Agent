@@ -9,8 +9,13 @@ import pytesseract
 from PIL import Image
 import ocrmypdf
 
-import os
-os.environ["PATH"] += os.pathsep + r"C:\Program Files\Tesseract-OCR"
+tess_path = r"C:\Program Files\Tesseract-OCR"
+os.environ["PATH"] += os.pathsep + tess_path
+os.environ["TESSDATA_PREFIX"] = tess_path
+
+# --- Explicitly tell pytesseract the location ---
+pytesseract.pytesseract.tesseract_cmd = os.path.join(tess_path, "tesseract.exe")
+
 
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
