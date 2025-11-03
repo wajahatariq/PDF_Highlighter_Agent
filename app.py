@@ -8,6 +8,7 @@ from litellm import completion
 import pytesseract
 from PIL import Image
 import ocrmypdf
+import os
 
 tess_path = r"C:\Program Files\Tesseract-OCR"
 os.environ["PATH"] += os.pathsep + tess_path
