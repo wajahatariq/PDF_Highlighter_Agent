@@ -9,6 +9,9 @@ import pytesseract
 from PIL import Image
 import ocrmypdf
 
+import os
+os.environ["PATH"] += os.pathsep + r"C:\Program Files\Tesseract-OCR"
+
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
 
