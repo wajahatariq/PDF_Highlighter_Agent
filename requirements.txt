@@ -1,7 +1,5 @@
 streamlit
+requests
 pymupdf
 litellm
-pytesseract
 pillow
-ocrmypdf
-requests
