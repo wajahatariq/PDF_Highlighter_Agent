@@ -131,30 +131,29 @@ def smart_parse_companies(raw: str) -> List[str]:
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
     doc = fitz.open(input_path)
     for page_num, page in enumerate(doc):
-        for t in targets:
-            if not t.strip():
+        for company in targets:
+            if not company.strip():
                 continue
-            rects = page.search_for(t, flags=fitz.TEXT_DEHYPHENATE)
-            st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{t}'")
-            for r in rects:
-                # Inflate rect slightly to cover full text nicely
-                r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
+            words = company.split()
+            for word in words:
+                rects = page.search_for(word, flags=fitz.TEXT_IGNORECASE | fitz.TEXT_DEHYPHENATE)
+                st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{word}'")
+                for r in rects:
+                    r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
+                    
+                    # Draw colored backdrop
+                    shape = page.new_shape()
+                    fill_color = tuple(int(c * 255) for c in rgb_fill)
+                    shape.draw_rect(r_inflated)
+                    shape.finish(fill=fill_color + (int(opacity_val * 255),), color=None)
+                    shape.commit()
 
-                # Draw filled rectangle (backdrop) behind text
-                shape = page.new_shape()
-                # convert rgb_fill (0..1) to 0..255 for fill color with opacity
-                fill_color = tuple(int(c * 255) for c in rgb_fill)
-                shape.draw_rect(r_inflated)
-                shape.finish(fill=fill_color + (int(opacity_val * 255),), color=None)
-                shape.commit()
-
-                # Optional: add highlight annotation on top (yellow default)
-                annot = page.add_highlight_annot(r)
-                annot.update()
+                    # Optional: highlight annotation on top (yellow default)
+                    annot = page.add_highlight_annot(r)
+                    annot.update()
 
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
-
 
 # ---------- MAIN ----------
 if process:
