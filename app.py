@@ -138,13 +138,13 @@ def smart_parse_companies(raw: str) -> List[str]:
 
 
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
-    """Highlight given targets with colored rectangles."""
     doc = fitz.open(input_path)
-    for page in doc:
+    for page_num, page in enumerate(doc):
         for t in targets:
             if not t.strip():
                 continue
-            rects = page.search_for(t)
+            rects = page.search_for(t, flags=fitz.TEXT_DEHYPHENATE | fitz.TEXT_IGNORECASE)
+            st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{t}'")
             for r in rects:
                 r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
                 annot = page.add_rect_annot(r_inflated)
