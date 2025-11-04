@@ -180,7 +180,8 @@ if process:
                     except Exception:
                         pass
                 doc.close()
-                
+
+                # --- Step 2: Fallback to OCR.Space if no text found ---
                 if not "".join(all_text).strip():
                     st.warning(f"No text detected in {uploaded.name}. Running OCR via OCR.Space...")
                     ocr_api_key = st.secrets["ocr"]["api_key"]
@@ -190,16 +191,6 @@ if process:
                     else:
                         st.error("OCR failed to extract text.")
                         continue
-                    all_text = []
-                    for p in doc:
-                        try:
-                            page_text = p.get_text("text")
-                            if page_text.strip():
-                                all_text.append(page_text)
-                        except Exception:
-                            pass
-                    doc.close()
-
 
                 # Only send Experience section to model
                 full_text = "\n".join(all_text)
