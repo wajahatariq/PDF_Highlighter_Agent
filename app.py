@@ -60,7 +60,7 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
 
                         Output should only be in the from of list like "[a,b,c]" nothing extra other than that just a list
 
-                        '''
+                        ''')
                 },
                 {"role": "user", "content": pdf_text},
             ],
