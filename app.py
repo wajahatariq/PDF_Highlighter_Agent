@@ -5,10 +5,10 @@ import json
 import re
 from typing import List
 from litellm import completion
-import pytesseract
 from PIL import Image
-import ocrmypdf
 import os
+import requests
+import tempfile
 
 
 # ---------- CONFIG ----------
@@ -44,19 +44,6 @@ def extract_experience_section(text: str) -> str:
         section = match.group(1).strip()
         return section
     return text.strip()
-
-def convert_to_searchable_pdf(input_pdf: str) -> str:
-    """Run OCR to create a searchable, editable PDF if needed."""
-    import tempfile
-    output_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-    try:
-        env = os.environ.copy()
-        env["PATH"] += os.pathsep + r"C:\Program Files\Tesseract-OCR"
-        ocrmypdf.ocr(input_pdf, output_pdf, deskew=True, force_ocr=True, env=env)
-    except Exception as e:
-        st.error(f"OCRmyPDF error: {e}")
-        return input_pdf  # fallback
-    return output_pdf
     
 def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
     """Call Groq LLM via LiteLLM to extract company names."""
@@ -93,7 +80,24 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
     except Exception as e:
         st.error(f"Groq LiteLLM error: {e}")
         return "[]"
-
+def ocr_space_extract_text(file_path: str, api_key: str) -> str:
+    """Extract text from image or PDF using OCR.Space API."""
+    url = "https://api.ocr.space/parse/image"
+    with open(file_path, "rb") as f:
+        response = requests.post(
+            url,
+            files={"file": f},
+            data={
+                "apikey": api_key,
+                "language": "eng",
+                "isOverlayRequired": False,
+            },
+        )
+    result = response.json()
+    try:
+        return result["ParsedResults"][0]["ParsedText"]
+    except Exception:
+        return ""
 
 def smart_parse_companies(raw: str) -> List[str]:
     """Parse JSON or natural text to extract company names."""
@@ -177,11 +181,15 @@ if process:
                         pass
                 doc.close()
                 
-                # --- Step 2: Fallback to OCR if no text found ---
                 if not "".join(all_text).strip():
-                    st.warning(f"No text detected in {uploaded.name}. Running OCR to make it editable...")
-                    searchable_pdf = convert_to_searchable_pdf(tmp_in.name)
-                    doc = fitz.open(searchable_pdf)
+                    st.warning(f"No text detected in {uploaded.name}. Running OCR via OCR.Space...")
+                    ocr_api_key = st.secrets["ocr"]["api_key"]
+                    extracted_text = ocr_space_extract_text(tmp_in.name, ocr_api_key)
+                    if extracted_text.strip():
+                        all_text = [extracted_text]
+                    else:
+                        st.error("OCR failed to extract text.")
+                        continue
                     all_text = []
                     for p in doc:
                         try:
