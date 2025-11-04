@@ -108,6 +108,7 @@ if process:
                 tmp_in.write(uploaded.read())
                 tmp_in.flush()
 
+                # Extract full text from PDF pages
                 doc = fitz.open(tmp_in.name)
                 all_text = []
                 for p in doc:
@@ -117,14 +118,15 @@ if process:
                         pass
                 doc.close()
 
-                full_text = "\n".join(all_text)
-                text_for_model = extract_experience_section(full_text)[:5000]
+                # Send entire text to LLM (no regex extraction)
+                text_for_model = "\n".join(all_text)[:5000]
 
-                st.text_area("Extracted Experience Section", text_for_model, height=250)
+                st.text_area("Full extracted text", text_for_model, height=250)
 
-                companies = call_groq_via_litellm(text_for_model, api_key)
-                st.text_area("Raw LLM output", str(companies), height=150)
+                raw_response = call_groq_via_litellm(text_for_model, api_key)
+                st.text_area("Raw LLM output", raw_response, height=150)
 
+                companies = smart_parse_companies(raw_response)
                 if not companies:
                     st.warning(f"No company names detected for {uploaded.name}.")
                     continue
