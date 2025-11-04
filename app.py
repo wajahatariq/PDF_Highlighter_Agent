@@ -56,20 +56,11 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                     "content": (
                         '''
                         You are a precise information extraction assistant. 
-                        Your goal is to read a person's CV text and extract only the **names of actual companies or organizations** where they have worked.
-                        
-                        Ignore:
-                        - Job titles, roles, and positions
-                        - Project names or campaigns
-                        - Educational institutions
-                        - Section headings or skills
-                        - Any non-company words or phrases
-                        
-                        Return only the company or organization names as a valid JSON array. 
-                        Do not include any explanations or extra text — the entire response must be valid JSON, for example:
-                        ['a', 'b']
+                        Your goal is to read a person's CV text and extract only the **names of actual companies" where a person has worked. Ignore the name of campaigns or anyother things just name of the companies where the person has actually worked.
+
+                        Output should only be in the from of list like "[a,b,c]" nothing extra other than that just a list
+
                         '''
-                    )
                 },
                 {"role": "user", "content": pdf_text},
             ],
@@ -146,9 +137,9 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
             rects = page.search_for(t, flags=fitz.TEXT_DEHYPHENATE | fitz.TEXT_IGNORECASE)
             st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{t}'")
             for r in rects:
-                r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
-                annot = page.add_rect_annot(r_inflated)
-                annot.set_colors(stroke=None, fill=rgb_fill)
+                # Use highlight annotation instead of rect annotation
+                annot = page.add_highlight_annot(r)
+                annot.set_colors(stroke=None, fill=rgb_fill)  # stroke=None means no border line
                 annot.set_opacity(opacity_val)
                 annot.update()
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
