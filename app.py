@@ -137,11 +137,21 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
             rects = page.search_for(t, flags=fitz.TEXT_DEHYPHENATE)
             st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{t}'")
             for r in rects:
-                # Use highlight annotation instead of rect annotation
+                # Inflate rect slightly to cover full text nicely
+                r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
+
+                # Draw filled rectangle (backdrop) behind text
+                shape = page.new_shape()
+                # convert rgb_fill (0..1) to 0..255 for fill color with opacity
+                fill_color = tuple(int(c * 255) for c in rgb_fill)
+                shape.draw_rect(r_inflated)
+                shape.finish(fill=fill_color + (int(opacity_val * 255),), color=None)
+                shape.commit()
+
+                # Optional: add highlight annotation on top (yellow default)
                 annot = page.add_highlight_annot(r)
-                annot.set_colors(stroke=None, fill=rgb_fill)  # stroke=None means no border line
-                annot.set_opacity(opacity_val)
                 annot.update()
+
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
 
