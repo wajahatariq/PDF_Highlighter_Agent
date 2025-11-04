@@ -136,7 +136,7 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
                 continue
             words = company.split()
             for word in words:
-                rects = page.search_for(word, flags=fitz.TEXT_IGNORECASE | fitz.TEXT_DEHYPHENATE)
+                rects = page.search_for(word, flags=fitz.TEXT_DEHYPHENATE)
                 st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{word}'")
                 for r in rects:
                     r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
