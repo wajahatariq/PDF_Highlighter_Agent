@@ -134,7 +134,7 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
         for t in targets:
             if not t.strip():
                 continue
-            rects = page.search_for(t, flags=fitz.TEXT_DEHYPHENATE | fitz.TEXT_IGNORECASE)
+            rects = page.search_for(t, flags=fitz.TEXT_DEHYPHENATE)
             st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{t}'")
             for r in rects:
                 # Use highlight annotation instead of rect annotation
