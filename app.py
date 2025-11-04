@@ -2,7 +2,6 @@ import streamlit as st
 import tempfile
 import fitz  # PyMuPDF
 import json
-import re
 from typing import List
 from litellm import completion
 
@@ -10,14 +9,13 @@ from litellm import completion
 st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
 
 st.title("PDF Company Highlighter (LiteLLM)")
-st.write("Upload a CV PDF, extract company names from the Experience section, and highlight them.")
+st.write("Upload a CV PDF, extract company names from the text, and highlight them.")
 
 # --- User inputs ---
 uploaded_files = st.file_uploader("Upload PDF(s)", type=["pdf"], accept_multiple_files=True)
 color_choice = st.selectbox("Backdrop color", ["red", "yellow", "green", "blue", "black"], index=0)
 opacity = st.slider("Backdrop opacity (0 = transparent, 1 = opaque)", 0.1, 0.9, 0.45)
 process = st.button("Process PDFs")
-
 
 # ---------- HELPERS ----------
 def color_to_rgb_tuple(color_name: str):
@@ -29,17 +27,6 @@ def color_to_rgb_tuple(color_name: str):
         "blue": (0, 0, 1),
     }
     return mapping.get(color_name.lower(), (1, 0, 0))
-
-
-def extract_experience_section(text: str) -> str:
-    """Extract only the 'Experience' section from CV text."""
-    pattern = r"(?is)(experience[\s\S]*?)(education|extra|skill|objective|$)"
-    match = re.search(pattern, text)
-    if match:
-        section = match.group(1).strip()
-        return section
-    return text.strip()
-
 
 def call_groq_via_litellm(pdf_text: str, api_key: str) -> List[str]:
     """Call Groq LLM via LiteLLM to extract company names as a JSON array."""
@@ -76,7 +63,6 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> List[str]:
         st.error(f"Groq LiteLLM error or JSON parsing error: {e}")
         return []
 
-
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
     doc = fitz.open(input_path)
     for page in doc:
@@ -92,7 +78,6 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
                 annot.update()
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
-
 
 # ---------- MAIN ----------
 if process:
@@ -123,10 +108,9 @@ if process:
 
                 st.text_area("Full extracted text", text_for_model, height=250)
 
-                raw_response = call_groq_via_litellm(text_for_model, api_key)
-                st.text_area("Raw LLM output", raw_response, height=150)
+                companies = call_groq_via_litellm(text_for_model, api_key)
+                st.text_area("Detected companies (list)", str(companies), height=150)
 
-                companies = smart_parse_companies(raw_response)
                 if not companies:
                     st.warning(f"No company names detected for {uploaded.name}.")
                     continue
