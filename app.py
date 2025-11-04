@@ -172,6 +172,7 @@ if process:
                 # --- Step 1: Try normal text extraction ---
                 doc = fitz.open(tmp_in.name)
                 all_text = []
+                doc.close()
                 for p in doc:
                     try:
                         page_text = p.get_text("text")
@@ -179,7 +180,6 @@ if process:
                             all_text.append(page_text)
                     except Exception:
                         pass
-                doc.close()
                 
                 if not "".join(all_text).strip():
                     st.warning(f"No text detected in {uploaded.name}. Running OCR via OCR.Space...")
