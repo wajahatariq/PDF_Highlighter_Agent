@@ -41,8 +41,8 @@ def extract_experience_section(text: str) -> str:
     return text.strip()
 
 
-def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
-    """Call Groq LLM via LiteLLM to extract company names."""
+def call_groq_via_litellm(pdf_text: str, api_key: str) -> List[str]:
+    """Call Groq LLM via LiteLLM to extract company names as a JSON array."""
     try:
         response = completion(
             model="groq/llama-3.1-8b-instant",
@@ -72,52 +72,19 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
             api_key=api_key,
             temperature=0.0,
         )
-        return response["choices"][0]["message"]["content"]
-    except Exception as e:
-        st.error(f"Groq LiteLLM error: {e}")
-        return "[]"
+        content = response["choices"][0]["message"]["content"]
 
-
-def smart_parse_companies(raw: str) -> List[str]:
-    """Parse JSON or natural text to extract company names."""
-    raw = raw.strip()
-    if not raw:
+        # Parse LLM JSON response directly, no regex fallback
+        companies = json.loads(content)
+        if isinstance(companies, list):
+            return [c.strip() for c in companies if isinstance(c, str) and c.strip()]
         return []
-
-    # Try strict JSON first
-    try:
-        match = re.search(r"\[.*?\]", raw, re.DOTALL)
-        if match:
-            arr = json.loads(match.group())
-            if isinstance(arr, list):
-                return [x.strip() for x in arr if isinstance(x, str) and x.strip()]
-    except Exception:
-        pass
-
-    # Fallback: extract from natural sentences
-    lines = re.split(r"[\n,.;]", raw)
-    candidates = []
-    for line in lines:
-        m = re.findall(r"\b([A-Z][A-Za-z0-9&\-\s]{1,40})\b", line)
-        for c in m:
-            if len(c.split()) <= 4 and not any(
-                bad in c.lower()
-                for bad in ["experience", "company", "worked", "organization"]
-            ):
-                candidates.append(c.strip())
-
-    # Deduplicate, preserve order
-    seen = set()
-    final = []
-    for c in candidates:
-        if c.lower() not in seen:
-            seen.add(c.lower())
-            final.append(c)
-    return final
+    except Exception as e:
+        st.error(f"Groq LiteLLM error or JSON parsing error: {e}")
+        return []
 
 
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
-    """Highlight given targets with colored rectangles."""
     doc = fitz.open(input_path)
     for page in doc:
         for t in targets:
@@ -148,7 +115,6 @@ if process:
                 tmp_in.write(uploaded.read())
                 tmp_in.flush()
 
-                # Extract text
                 doc = fitz.open(tmp_in.name)
                 all_text = []
                 for p in doc:
@@ -158,16 +124,14 @@ if process:
                         pass
                 doc.close()
 
-                # Only send Experience section to model
                 full_text = "\n".join(all_text)
                 text_for_model = extract_experience_section(full_text)[:5000]
 
                 st.text_area("Extracted Experience Section", text_for_model, height=250)
 
-                raw_response = call_groq_via_litellm(text_for_model, api_key)
-                st.text_area("Raw LLM output", raw_response, height=150)
+                companies = call_groq_via_litellm(text_for_model, api_key)
+                st.text_area("Raw LLM output", str(companies), height=150)
 
-                companies = smart_parse_companies(raw_response)
                 if not companies:
                     st.warning(f"No company names detected for {uploaded.name}.")
                     continue
