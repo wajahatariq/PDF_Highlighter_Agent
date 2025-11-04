@@ -39,7 +39,7 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> List[str]:
                     "content": (
                         '''
                         You are a precise information extraction assistant. 
-                        Your goal is to read a person's CV text and extract only the **names of actual companies or organizations** where they have worked.
+                        Your goal is to read a person's CV text and extract only the **names of actual companies or organizations** where the person have worked. Don't include their education place or anything just the experience section where person have worked in a certain company
                         
                         Return only the company or organization names as a valid JSON array. Don't give nothing else 
                         Do not include any explanations or extra text — the entire response must be valid JSON, for example:
