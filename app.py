@@ -5,10 +5,7 @@ import json
 import re
 from typing import List
 from litellm import completion
-from PIL import Image
-import os
 import requests
-import tempfile
 
 
 # ---------- CONFIG ----------
@@ -71,24 +68,7 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
     except Exception as e:
         st.error(f"Groq LiteLLM error: {e}")
         return "[]"
-def ocr_space_extract_text(file_path: str, api_key: str) -> str:
-    """Extract text from image or PDF using OCR.Space API."""
-    url = "https://api.ocr.space/parse/image"
-    with open(file_path, "rb") as f:
-        response = requests.post(
-            url,
-            files={"file": f},
-            data={
-                "apikey": api_key,
-                "language": "eng",
-                "isOverlayRequired": False,
-            },
-        )
-    result = response.json()
-    try:
-        return result["ParsedResults"][0]["ParsedText"]
-    except Exception:
-        return ""
+
 
 def smart_parse_companies(raw: str) -> List[str]:
     """Parse JSON or natural text to extract company names."""
@@ -140,7 +120,7 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
                 st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{word}'")
                 for r in rects:
                     r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
-                    
+
                     # Draw colored backdrop
                     shape = page.new_shape()
                     fill_color = tuple(int(c * 255) for c in rgb_fill)
@@ -154,6 +134,7 @@ def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List
 
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
+
 
 # ---------- MAIN ----------
 if process:
@@ -181,16 +162,11 @@ if process:
                         pass
                 doc.close()
 
-                # --- Step 2: Fallback to OCR.Space if no text found ---
+                # --- Skip OCR fallback entirely ---
+
                 if not "".join(all_text).strip():
-                    st.warning(f"No text detected in {uploaded.name}. Running OCR via OCR.Space...")
-                    ocr_api_key = st.secrets["ocr"]["api_key"]
-                    extracted_text = ocr_space_extract_text(tmp_in.name, ocr_api_key)
-                    if extracted_text.strip():
-                        all_text = [extracted_text]
-                    else:
-                        st.error("OCR failed to extract text.")
-                        continue
+                    st.error(f"No text detected in {uploaded.name}. This app works only on text-based PDFs.")
+                    continue
 
                 # Only send Experience section to model
                 full_text = "\n".join(all_text)
