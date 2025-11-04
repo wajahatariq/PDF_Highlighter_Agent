@@ -5,8 +5,6 @@ import json
 import re
 from typing import List
 from litellm import completion
-import requests
-
 
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PDF Company Highlighter", layout="wide")
@@ -41,7 +39,8 @@ def extract_experience_section(text: str) -> str:
         section = match.group(1).strip()
         return section
     return text.strip()
-    
+
+
 def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
     """Call Groq LLM via LiteLLM to extract company names."""
     try:
@@ -53,11 +52,20 @@ def call_groq_via_litellm(pdf_text: str, api_key: str) -> str:
                     "content": (
                         '''
                         You are a precise information extraction assistant. 
-                        Your goal is to read a person's CV text and extract only the **names of actual companies" where a person has worked. Ignore the name of campaigns or anyother things just name of the companies where the person has actually worked.
-
-                        Output should only be in the from of list like "[a,b,c]" nothing extra other than that just a list
-
-                        ''')
+                        Your goal is to read a person's CV text and extract only the **names of actual companies or organizations** where they have worked.
+                        
+                        Ignore:
+                        - Job titles, roles, and positions
+                        - Project names or campaigns
+                        - Educational institutions
+                        - Section headings or skills
+                        - Any non-company words or phrases
+                        
+                        Return only the company or organization names as a valid JSON array. 
+                        Do not include any explanations or extra text — the entire response must be valid JSON, for example:
+                        ['a', 'b']
+                        '''
+                    )
                 },
                 {"role": "user", "content": pdf_text},
             ],
@@ -109,29 +117,19 @@ def smart_parse_companies(raw: str) -> List[str]:
 
 
 def highlight_pdf_with_backdrop(input_path: str, output_path: str, targets: List[str], rgb_fill: tuple, opacity_val: float):
+    """Highlight given targets with colored rectangles."""
     doc = fitz.open(input_path)
-    for page_num, page in enumerate(doc):
-        for company in targets:
-            if not company.strip():
+    for page in doc:
+        for t in targets:
+            if not t.strip():
                 continue
-            words = company.split()
-            for word in words:
-                rects = page.search_for(word, flags=fitz.TEXT_DEHYPHENATE)
-                st.write(f"Page {page_num+1}: Found {len(rects)} highlights for '{word}'")
-                for r in rects:
-                    r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
-
-                    # Draw colored backdrop
-                    shape = page.new_shape()
-                    fill_color = tuple(int(c * 255) for c in rgb_fill)
-                    shape.draw_rect(r_inflated)
-                    shape.finish(fill=fill_color + (int(opacity_val * 255),), color=None)
-                    shape.commit()
-
-                    # Optional: highlight annotation on top (yellow default)
-                    annot = page.add_highlight_annot(r)
-                    annot.update()
-
+            rects = page.search_for(t)
+            for r in rects:
+                r_inflated = fitz.Rect(r.x0 - 1, r.y0 - 0.5, r.x1 + 1, r.y1 + 0.5)
+                annot = page.add_rect_annot(r_inflated)
+                annot.set_colors(stroke=None, fill=rgb_fill)
+                annot.set_opacity(opacity_val)
+                annot.update()
     doc.save(output_path, incremental=False, encryption=fitz.PDF_ENCRYPT_KEEP)
     doc.close()
 
@@ -150,23 +148,15 @@ if process:
                 tmp_in.write(uploaded.read())
                 tmp_in.flush()
 
-                # --- Step 1: Try normal text extraction ---
+                # Extract text
                 doc = fitz.open(tmp_in.name)
                 all_text = []
                 for p in doc:
                     try:
-                        page_text = p.get_text("text")
-                        if page_text.strip():
-                            all_text.append(page_text)
+                        all_text.append(p.get_text("text"))
                     except Exception:
                         pass
                 doc.close()
-
-                # --- Skip OCR fallback entirely ---
-
-                if not "".join(all_text).strip():
-                    st.error(f"No text detected in {uploaded.name}. This app works only on text-based PDFs.")
-                    continue
 
                 # Only send Experience section to model
                 full_text = "\n".join(all_text)
